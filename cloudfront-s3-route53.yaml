@@ -31,7 +31,7 @@ Resources:
           -  "arn:aws:s3:::my-simple-s3-bucket/*"
           Principal: 
             CanonicalUser: !GetAtt OAI.S3CanonicalUserId # Allow above created OAI to access this bucket
-        # If you want to allow upload to bucket from some other source(ex. EC2 instance), You may set bucket policy for that purpose or configure IAM Policy and attach to user, role, group, ...) for that purpose
+        # If you want to allow upload to bucket from some other source(ex. EC2 instance), You may set bucket policy for that purpose or configure IAM Policy and attach to user, role, group, ...)
         # - Sid: "AllowUpload"
         #   Action:
         #   - "s3:GetObject"
