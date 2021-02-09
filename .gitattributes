@@ -1,3 +1,1 @@
-* linguist-vendored
-*.md linguist-vendored=false
-*.* linguist-language=yaml
+*.* linguist-language=YAML
