@@ -91,6 +91,6 @@ Resources:
       AliasTarget: 
         DNSName: !GetAtt CloudFront.DomainName # reqeusts to mydomain.example.com will go to CloudFront Domain address
         EvaluateTargetHealth: false
-        HostedZoneId: YOUR-HOSTED-ZONE-ID
+        HostedZoneId: Z2FDTNDATAQYW2 # It is mandatory to set HostedZoneId as Z2FDTNDATAQYW2 if your origin is S3 bucket.(https://docs.aws.amazon.com/ko_kr/AWSCloudFormation/latest/UserGuide/quickref-route53.html)
       Type: A
       Name: mydomain.example.com.
