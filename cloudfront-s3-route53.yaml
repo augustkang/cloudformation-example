@@ -81,7 +81,7 @@ Resources:
         ViewerCertificate:
           MinimumProtocolVersion: TLSv1 # Minimum TLS Version - Please refer to available TLSVersion name list
           SslSupportMethod: sni-only
-          AcmCertificateArn: YOUR-ARN-OF-ACN-CERTIFICATE # ARN of Acm Certificate to use for HTTPS
+          AcmCertificateArn: YOUR-ARN-OF-N.VIRGINIA-ACM-CERTIFICATE # HTTPS - Acm Certificate arn, must be in N.Virginia region. See https://docs.aws.amazon.com/acm/latest/userguide/acm-regions.html
 
   # route53 DNS A-ALIAS Record
   Route53DNSRecord:
