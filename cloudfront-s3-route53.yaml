@@ -31,6 +31,21 @@ Resources:
           -  "arn:aws:s3:::my-simple-s3-bucket/*"
           Principal: 
             CanonicalUser: !GetAtt OAI.S3CanonicalUserId # Allow above created OAI to access this bucket
+        # - Sid: "DenyNowAllowedAccess" If you want to deny all access except OAI to this bucket, use explicit deny rule
+        #   Action: ["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:ListBucket"]
+        #   Effect: "Deny"
+        #   Resource:
+        #   - "arn:aws:s3:::my-simple-s3-bucket/*"
+        #   - "arn:aws:s3:::my-simple-s3-bucket"
+        # # NotPrincipal:
+        #   CanonicalUser: !GetAtt OAI.S3CanonicalUserId - Other principals will denied
+        # Condition: - You can also exclude some other entities like IAM Role, IAM User
+        #   ArnNotLike: - for example, excluding IAM role from deny rule
+        #     "aws:PrincipalArn": 
+        #     - "arn:aws:iam::YOUR-ACCOUNT-ID:role/SOME-IAM-ROLE"
+        #  
+        #  As a result, This Bucket will deny all accesses except OAI and IAM Role named "SOME-IAM-ROLE" 
+        #
         # If you want to allow upload to bucket from some other source(ex. EC2 instance), You may set bucket policy for that purpose or configure IAM Policy and attach to user, role, group, ...)
         # - Sid: "AllowUpload"
         #   Action:
@@ -42,7 +57,9 @@ Resources:
         #   Resource:
         #   - "arn:aws:s3:::my-simple-s3-bucket/*"
         #   - "arn:aws:s3:::my-simple-s3-bucket"
-        #   Principal: "SOME-IAM-ARM-TO-ALLOW-UPLOAD"
+        #   Principal:
+        #     AWS:
+        #     - "SOME-IAM-ARN-TO-ALLOW-UPLOAD"
   
   # CloudFront distribution    
   CloudFront:
