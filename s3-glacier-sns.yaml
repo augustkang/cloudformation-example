@@ -5,7 +5,7 @@
 # If not GLACIER, request will be denied.
 
 # User can upload as belows using AWS CLI.
-# aws s3 cp FIELNAME s3://glacier-example-bucket/ --storage-class GLACIER
+# aws s3 cp FILENAME s3://glacier-example-bucket/ --storage-class GLACIER
 
 Resources:
   S3ForGlacier:
