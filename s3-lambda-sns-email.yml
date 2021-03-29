@@ -177,4 +177,3 @@ Resources:
         Variables:
           Topic: !Ref MySNSTopic
           # Webhook: "YOUR-WEBHOOK-URL"
-    DependsOn: MyLambdaRole
