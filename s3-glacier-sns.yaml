@@ -57,9 +57,6 @@ Resources:
     Type: AWS::SNS::Topic
     Properties:
       TopicName: glacier-example-bucket
-      Subscription:
-        - Endpoint: my-email-address@example.com
-          Protocol: email
   
   # SNS Topic policy which allows S3 bucket to publish notification
   SNSForGlacierPolicy:
@@ -81,3 +78,10 @@ Resources:
             ArnLike:
               "aws:SourceArn":
               - "arn:aws:s3:::glacier-example-bucket"
+  # SNS Subscription
+  SNSSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Endpoint: my-email-address@example.com
+      Protocol: email
+      TopicArn: !Ref SNSForGlacier
