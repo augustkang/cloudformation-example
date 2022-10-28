@@ -20,6 +20,10 @@ Metadata:
           - GitHubOwner
           - GithubRepository
       - Label:
+          default: "WAF WebACL Allow IP"
+        Parameters:
+          - IPAddress
+      - Label:
           default: "ACM Certificate"
         Parameters:
           - CertificateArn
@@ -36,6 +40,8 @@ Parameters:
   GitHubOwner:
     Type: String
   GithubRepository:
+    Type: String
+  IPAddress:
     Type: String
   CertificateArn:
     Type: String
@@ -137,6 +143,7 @@ Resources:
         Comment: !Sub "[${Phase}] ${OriginDomain}"
         Aliases:
           - !Ref OriginDomain
+        WebACLId: !GetAtt WebACL.Arn
         DefaultCacheBehavior:
           CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6 # Managed-CachingOptimized
           ViewerProtocolPolicy: redirect-to-https
@@ -175,3 +182,37 @@ Resources:
         OriginAccessControlOriginType: s3
         SigningBehavior: always
         SigningProtocol: sigv4
+
+  IPSet:
+    Type: AWS::WAFv2::IPSet
+    Properties:
+      Name: !Sub ${ServiceName}-${Purpose}-${Phase}-ipset
+      Scope: "CLOUDFRONT"
+      IPAddressVersion: IPV4
+      Addresses:
+        - !Ref IPAddress
+
+  WebACL:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Name: !Sub ${ServiceName}-${Purpose}-${Phase}-WebACL
+      Scope: "CLOUDFRONT"
+      Description: !Sub ${OriginDomain} WebACL
+      VisibilityConfig:
+        SampledRequestsEnabled: true
+        CloudWatchMetricsEnabled: true
+        MetricName: !Sub ${ServiceName}-${Purpose}-${Phase}-WebACL-metric
+      DefaultAction:
+        Block: {}
+      Rules:
+        - Name: !Sub ${ServiceName}-${Purpose}-${Phase}-WebACL-rule
+          Priority: 1
+          Action:
+            Allow: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: !Sub ${ServiceName}-${Purpose}-${Phase}-IPSetMetric
+          Statement:
+            IPSetReferenceStatement:
+              Arn: !GetAtt IPSet.Arn
