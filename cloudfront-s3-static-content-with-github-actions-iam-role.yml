@@ -1,27 +1,41 @@
-# Warning! This CloudFormation stack is not validated yet(NOT TESTED)
-
-# CloudFront Distribution, OAI, and S3 Bucket as origin. Bucket has Bucket Policy to allow OAI access for s3:GetObject
-# Also included AWS WAF IPSet, Rule, WebACL for CloudFront.
-
-# If you have to allow specific IPs only, you can use this template as is but if you don't need ACL, comment out thos WAF related resources.
-
-# Also IAM Role for Github Actions to assume so that Github Actions can deploy to S3 Bucket, and invalidate CloudFront old content in Github Actions as well.
-
-# TODO : Provisioning test and validate
+# CloudFormation template for Static website hosting using S3 and CloudFront.
+# Resources:
+# CloudFront Distribution, OAC(Origin Access Control), and S3 Bucket as origin. Bucket has Bucket Policy to allow Origin Access Control for s3:GetObject
+# Also IAM Role for Github Actions to assume so that Github Actions workflow can deploy to S3 Bucket, and can invalidate CloudFront cached old content.
 
 AWSTemplateFormatVersion: 2010-09-09
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "Service Parameters"
+        Parameters:
+          - ServiceName
+          - Purpose
+          - Phase
+          - OriginDomain
+      - Label:
+          default: "Github Parameters"
+        Parameters:
+          - GitHubOwner
+          - GithubRepository
+      - Label:
+          default: "ACM Certificate"
+        Parameters:
+          - CertificateArn
+
 Parameters:
-  Stage:
-    Type: String
   ServiceName:
+    Type: String
+  Purpose:
+    Type: String
+  Phase:
     Type: String
   OriginDomain:
     Type: String
-  AllowedIp1:
+  GitHubOwner:
     Type: String
-  GithubOrganization:
-    Type: String
-  RepositoryName:
+  GithubRepository:
     Type: String
   CertificateArn:
     Type: String
@@ -30,51 +44,58 @@ Resources:
   IAMRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${ServiceName}-${Stage}-iam-role'
+      RoleName: !Sub ${ServiceName}-${Purpose}-${Phase}-github-role
       Path: "/"
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
-        - Effect: Allow
-          Principal:
-            Federated: !Sub arn:aws:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com
-          Action:
-          - sts:AssumeRoleWithWebIdentity
-          Condition:
-            StringLike:
-              "token.actions.githubusercontent.com:sub": !Sub "repo:${GithubOrganization}/${RepositoryName}:*"
+          - Effect: Allow
+            Principal:
+              Federated: !Sub arn:aws:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com
+            Action:
+              - sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringLike:
+                "token.actions.githubusercontent.com:sub": !Sub "repo:${GitHubOwner}/${GithubRepository}:*"
       Policies:
-      - PolicyName: CloudFrontPolicy
-        PolicyDocument:
-          Version: '2012-10-17'
-          Statement:
-          - Effect: Allow
-            Action:
-            - cloudfront:GetDistribution
-            - cloudfront:GetStreamingDistribution
-            - cloudfront:GetDistributionConfig
-            - cloudfront:ListDistributions
-            - cloudfront:ListCloudFrontOriginAccessIdentities
-            - cloudfront:CreateInvalidation
-            - cloudfront:GetInvalidation
-            - cloudfront:ListInvalidations
-            Resource:
-            - !Join ["", [!Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/'], !Ref CloudFront] # Validation needed for this syntax
-      - PolicyName: S3Policy
-        PolicyDocument:
-          Version: '2012-10-17'
-          Statement:
-          - Effect: Allow
-            Action:
-            - s3:ListBucket
-            Resource:
-            - !Sub arn:aws:s3:::${OriginDomain}
-          - Effect: Allow
-            Action:
-            - s3:PubObject
-            - s3:GetObject
-            Resource:
-            - !Sub arn:aws:s3:::${OriginDomain}/*
+        - PolicyName: !Sub ${ServiceName}-${Purpose}-${Phase}-github-cloudfront-policy
+          PolicyDocument:
+            Version: "2008-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudfront:GetDistribution
+                  - cloudfront:GetStreamingDistribution
+                  - cloudfront:GetDistributionConfig
+                  - cloudfront:ListDistributions
+                  - cloudfront:ListCloudFrontOriginAccessIdentities
+                  - cloudfront:CreateInvalidation
+                  - cloudfront:GetInvalidation
+                  - cloudfront:ListInvalidations
+                Resource:
+                  - !Join [
+                      "",
+                      [
+                        !Sub "arn:aws:cloudfront::${AWS::AccountId}:distribution/",
+                        !Ref CloudFront,
+                      ],
+                    ]
+        - PolicyName: !Sub ${ServiceName}-${Purpose}-${Phase}-github-s3-policy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource:
+                  - !Sub arn:aws:s3:::${OriginDomain}
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                  - s3:DeleteObject
+                Resource:
+                  - !Sub arn:aws:s3:::${OriginDomain}/*
 
   # S3 Bucket
   S3Bucket:
@@ -82,96 +103,75 @@ Resources:
     Properties:
       BucketName: !Ref OriginDomain
 
-  # CloudFront OAI to access S3 bucket
-  OAI:
-    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
-    Properties:
-      CloudFrontOriginAccessIdentityConfig:
-        Comment: !Sub '${OriginDomain} S3 - CloudFront Origin Access Identity'
-  
-  # S3 Bucket Policy which allows CloudFront OAI access
+  # S3 Bucket Policy which allows CloudFront OAC
   S3BucketPolicy:
     Type: AWS::S3::BucketPolicy
-    Properties: 
+    Properties:
       Bucket: !Ref S3Bucket
       PolicyDocument:
-        Statement: 
-        - Sid: "AllowOAIAccess"
-          Action: 
-          - "s3:GetObject"
-          Effect: "Allow"
-          Resource: 
-          -  !Sub "arn:aws:s3:::${OriginDomain}/*"
-          Principal: 
-            CanonicalUser: !GetAtt OAI.S3CanonicalUserId # Allow above created OAI to access this bucket
+        Statement:
+          - Sid: "AllowCloudFrontServicePrincipal"
+            Action:
+              - "s3:GetObject"
+            Effect: "Allow"
+            Resource:
+              - !Sub "arn:aws:s3:::${OriginDomain}/*"
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Condition:
+              StringEquals:
+                AWS:SourceArn:
+                  - !Join [
+                      "",
+                      [
+                        !Sub "arn:aws:cloudfront::${AWS::AccountId}:distribution/",
+                        !Ref CloudFront,
+                      ],
+                    ]
 
-  IPSet:
-    Type: AWS::WAF::IPSet
-    Properties:
-      Name: !Sub "${ServiceName}-${Stage}-waf-ipset"
-      IPSetDescriptors:
-      - Type: "IPV4"
-        Value: !Ref AllowedIp1
-
-  WAFRule:
-    Type: AWS::WAF::Rule
-    Properties:
-      Name: !Sub "${ServiceName}-${Stage}-waf-rule"
-      MetricName: "AllowedRequests"
-      Predicates:
-      - DataId: !Ref IPSet
-        Negated: false
-        Type: "IPMatch"
-
-  WAF:
-    Type: AWS::WAF::WebACL
-    Properties:
-      Name: !Sub "${ServiceName}-${Stage}-waf-WebACL"
-      DefaultAction:
-        Type: "BLOCK"
-      MetricName: "BlockedRequests"
-      Rules:
-      - Action:
-          Type: "ALLOW"
-        Priority: 1
-        RuleId: !Ref WAFRule
-  
-  # CloudFront distribution    
+  # CloudFront distribution
   CloudFront:
     Type: AWS::CloudFront::Distribution
     Properties:
-      DistributionConfig: # configure Distribution
-        WebACLId: !Ref WAF
+      DistributionConfig:
+        Comment: !Sub "[${Phase}] ${OriginDomain}"
         Aliases:
-        - !Ref OriginDomain
-        DefaultCacheBehavior: # Default Caching Behavior
-          MinTTL: 0 # Minimum TTL of Cached object
-          MaxTTL: 86400 # Maximum TTL of Cached object. (86400s == 24h)
-          ViewerProtocolPolicy: allow-all # Allow both HTTP and HTTPS
-          AllowedMethods: # HTTP Method type to allow
+          - !Ref OriginDomain
+        DefaultCacheBehavior:
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6 # Managed-CachingOptimized
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods:
             - HEAD
             - GET
-          CachedMethods: # HTTP Method type to cache
+            - OPTIONS
+          CachedMethods:
             - HEAD
             - GET
-          TargetOriginId: !Ref S3Bucket # Origin ID That CloudFront will access. It's S3 bucket here
-          ForwardedValues: # If request to CloudFront has cookie value, custom header or QueryString, you can choose whether it to forward it to origin or not
-            QueryString: false # Not forward query string to origin
-          DefaultTTL: 86400 # 24 hours as Default TTL
-          SmoothStreaming: false # Windows IIS specific attribute. If set true, it will support SmoothStreaming in Windows IIS
-          Compress: true # Compress object
-        DefaultRootObject: "" # Default Root Object
-        Enabled: true # If true, distribution will enabled
-        HttpVersion: http2 # client - cloudfront maximum HTTP Version
-        IPV6Enabled: false # Not to handle ipv6
-        Origins: # origin configuration
+          TargetOriginId: !Ref S3Bucket
+          SmoothStreaming: false
+          Compress: true
+        DefaultRootObject: index.html
+        Enabled: true
+        HttpVersion: http2
+        IPV6Enabled: false
+        Origins:
           - Id: !Ref S3Bucket
-            DomainName: !GetAtt S3Bucket.DomainName # origin dns address
+            DomainName: !GetAtt S3Bucket.DomainName
             OriginPath: ""
-            S3OriginConfig: 
-              OriginAccessIdentity: !Sub 'origin-access-identity/cloudfront/${OAI}' # your OAI
-        PriceClass: PriceClass_All # CloudFront Class - PriceClass_All will cache your object at every CloudFront Edge Location on earth
+            OriginAccessControlId: !GetAtt OriginAccessControl.Id
+            S3OriginConfig:
+              OriginAccessIdentity: ""
+        PriceClass: PriceClass_All
         ViewerCertificate:
-          MinimumProtocolVersion: TLSv1 # Minimum TLS Version - Please refer to available TLSVersion name list
+          MinimumProtocolVersion: TLSv1.2_2021
           SslSupportMethod: sni-only
-          AcmCertificateArn: !Ref CertificateArn # HTTPS - Acm Certificate arn, must be in N.Virginia region. See https://docs.aws.amazon.com/acm/latest/userguide/acm-regions.html
+          AcmCertificateArn: !Ref CertificateArn
+
+  OriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub ${ServiceName}-${Purpose}-${Phase}-origin-access-control
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
